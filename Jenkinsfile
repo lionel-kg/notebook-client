@@ -5,8 +5,7 @@ pipeline {
         // Nom de l'image et du conteneur
         IMAGE_NAME = "notebook_client"
         CONTAINER_NAME = "notebook-client"
-        // On définit le port interne de ton API (ex: 4000)
-        APP_PORT = "4100"
+        APP_PORT = "3000"
         // Adresse de l'API vers laquelle le front relaie /api/* (figée dans l'image au build)
         API_URL = "https://api-notebook.lionelkg.com"
     }
@@ -15,7 +14,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 echo 'Construction de l\'image Docker...'
-                sh 'docker build --build-arg API_URL=${API_URL} -t ${IMAGE_NAME}:latest .'
+                sh 'docker build -t ${IMAGE_NAME}:latest .'
             }
         }
 
