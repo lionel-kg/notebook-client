@@ -21,7 +21,8 @@ ENV HOSTNAME=0.0.0.0
 # Next.js standalone output copies only what's needed
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Pas de dossier public/ dans ce projet : si tu en ajoutes un (favicon, images...), ajoute ici :
+# COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
