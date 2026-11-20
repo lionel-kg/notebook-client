@@ -20,10 +20,13 @@ interface Props {
   subtitle: string;
   deskColor: string;
   onBack: () => void;
+  readOnly?: boolean;
+  owner?: string;
+  backLabel?: string;
 }
 
 /** Vue ordinateur : le livre ouvert en double page, outils à gauche, stickers à droite. */
-export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Props) {
+export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums' }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -82,7 +85,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
   };
 
   const deletable = visible.filter((i) => i !== 0 && i !== n - 1);
-  const canDelSpread = kk >= 1 && kk <= L - 1 && deletable.length > 0 && n - deletable.length >= 3;
+  const canDelSpread = !readOnly && kk >= 1 && kk <= L - 1 && deletable.length > 0 && n - deletable.length >= 3;
   const delSpread = () => {
     if (!canDelSpread || flipping !== null) return;
     if (!window.confirm('Supprimer cette double page et tout son contenu ?')) return;
@@ -119,7 +122,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
     const page = real === null ? null : pages[real];
     const isVisible = (slot === leftSlot || slot === rightSlot) && flipping === null;
     const isFront = side === 'front';
-    const activeRing = isVisible && real === activeIdx ? ', inset 0 0 0 3px rgba(246,193,67,.8)' : '';
+    const activeRing = !readOnly && isVisible && real === activeIdx ? ', inset 0 0 0 3px rgba(246,193,67,.8)' : '';
     const shade = isFront
       ? 'inset 20px 0 24px -18px rgba(40,25,10,.4), 0 18px 36px rgba(0,0,0,.35)'
       : 'inset -20px 0 24px -18px rgba(40,25,10,.4), 0 18px 36px rgba(0,0,0,.35)';
@@ -133,7 +136,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
         page={page}
         index={p}
         touch={false}
-        interactive={isVisible && real !== null}
+        interactive={!readOnly && isVisible && real !== null}
         tool={tool}
         selId={sel && sel.p === p ? sel.id : null}
         live={editor.live && editor.live.p === p ? { pts: editor.live.pts, color: editor.color, size: editor.size } : null}
@@ -183,13 +186,15 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
           {/* En-tête */}
           <button type="button" className="btn ghost" onClick={onBack} style={{ position: 'absolute', left: 20, top: 26, width: 108, justifyContent: 'center', padding: 0 }}>
             <IconBack size={16} />
-            Albums
+            {backLabel}
           </button>
           <div className="d-head">
             <div className="d-title">
               <span className="serif">{title}</span>
               {subtitle && <span className="hand">{subtitle}</span>}
+              {readOnly && owner && <span className="by">par {owner}</span>}
             </div>
+            {!readOnly && (
             <div className="row">
               <label className="btn">
                 <IconPhoto />
@@ -220,9 +225,11 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
                 Annuler
               </button>
             </div>
+            )}
           </div>
 
           {/* Outils */}
+          {!readOnly && (
           <div className="card d-tools">
             <div className="h">Outils</div>
             {(
@@ -276,6 +283,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
               ))}
             </div>
           </div>
+          )}
 
           {/* Livre */}
           <div className="book-wrap">
@@ -301,9 +309,10 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
               </button>
             )}
           </div>
-          <SaveStatus className="save d-save" state={editor.saveState} uploading={editor.uploading} />
+          {!readOnly && <SaveStatus className="save d-save" state={editor.saveState} uploading={editor.uploading} />}
 
           {/* Stickers, fond, sélection */}
+          {!readOnly && (
           <div className="card d-side">
             <div className="h">Stickers</div>
             <div className="grid2" style={{ gap: 6 }}>
@@ -376,6 +385,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack }: Pr
               </>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>

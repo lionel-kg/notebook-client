@@ -36,10 +36,13 @@ interface Props {
   subtitle: string;
   deskColor: string;
   onBack: () => void;
+  readOnly?: boolean;
+  owner?: string;
+  backLabel?: string;
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'mes albums' }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -137,17 +140,22 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack }: Pro
   return (
     <div className="m-root" style={{ backgroundColor: deskColor }}>
       <header className="m-head">
-        <button type="button" className="ic" onClick={onBack} aria-label="Retour à mes albums">
+        <button type="button" className="ic" onClick={onBack} aria-label={`Retour à ${backLabel.toLowerCase()}`}>
           <IconBack size={22} />
         </button>
         <div className="m-title">
           <span className="serif">{title}</span>
           {subtitle && <span className="hand">{subtitle}</span>}
+          {readOnly && owner && <span className="by">par {owner}</span>}
         </div>
-        <SaveStatus className="save m-save" state={editor.saveState} uploading={editor.uploading} />
-        <button type="button" className="ic" onClick={editor.undo} disabled={!editor.canUndo} aria-label="Annuler la dernière action">
-          <IconUndo size={22} />
-        </button>
+        {!readOnly && (
+          <>
+            <SaveStatus className="save m-save" state={editor.saveState} uploading={editor.uploading} />
+            <button type="button" className="ic" onClick={editor.undo} disabled={!editor.canUndo} aria-label="Annuler la dernière action">
+              <IconUndo size={22} />
+            </button>
+          </>
+        )}
       </header>
 
       <div className="m-stage" ref={stageRef}>
@@ -164,7 +172,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack }: Pro
                   page={page}
                   index={i}
                   touch
-                  interactive={isVisible}
+                  interactive={!readOnly && isVisible}
                   tool={tool}
                   selId={sel && sel.p === i ? sel.id : null}
                   live={editor.live && editor.live.p === i ? { pts: editor.live.pts, color: editor.color, size: editor.size } : null}
@@ -243,6 +251,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack }: Pro
         )}
       </div>
 
+      {!readOnly && (
       <div className="m-sheet">
         <div className="m-drawer">
           {tab === 'photos' && (
@@ -398,6 +407,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack }: Pro
           ))}
         </nav>
       </div>
+      )}
     </div>
   );
 }

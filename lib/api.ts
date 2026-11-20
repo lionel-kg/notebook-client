@@ -24,6 +24,21 @@ export interface Album {
   updatedAt: string;
 }
 
+export interface PublicAlbumSummary {
+  id: string;
+  title: string;
+  subtitle: string;
+  deskColor: string;
+  updatedAt: string;
+  owner: string;
+  pageCount: number;
+  photoCount: number;
+}
+
+export interface PublicAlbum extends Album {
+  owner: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -47,6 +62,10 @@ export const api = {
   register: (username: string, password: string) =>
     request<{ user: User }>('/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
+
+  publicAlbums: () => request<{ albums: PublicAlbumSummary[] }>('/public/albums'),
+  publicAlbum: (id: string) =>
+    request<{ album: PublicAlbum; pages: Page[]; canEdit: boolean }>(`/public/albums/${encodeURIComponent(id)}`),
 
   listAlbums: () => request<{ albums: AlbumSummary[] }>('/albums'),
   createAlbum: (title: string, subtitle: string) =>
