@@ -20,6 +20,7 @@ import {
   IconTrash,
   IconUndo,
 } from './Icons';
+import { LiveBadge } from './DesktopEditor';
 import { PageView } from './PageView';
 import { SaveStatus } from './SaveStatus';
 import { StickerArt } from './Sticker';
@@ -41,10 +42,14 @@ interface Props {
   owner?: string;
   backLabel?: string;
   loginHref?: string;
+  /** Nombre de personnes qui ont l'album ouvert (temps réel) */
+  viewers?: number;
+  /** Personne qui vient de modifier l'album (affiché quelques secondes) */
+  lastEditor?: string | null;
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -217,7 +222,11 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
             </button>
             <div className="m-label">
               <span>{label}</span>
-              <small>glisse la page pour tourner</small>
+              {lastEditor || viewers > 1 ? (
+                <LiveBadge viewers={viewers} lastEditor={lastEditor} />
+              ) : (
+                <small>glisse la page pour tourner</small>
+              )}
             </div>
             <button type="button" className="ic soft" onClick={() => go(1)} disabled={cur === n - 1} aria-label="Page suivante">
               <IconChevronRight size={22} />

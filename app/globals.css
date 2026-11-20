@@ -1085,3 +1085,32 @@ textarea.txt:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Activité en temps réel (autres personnes sur l'album) */
+.live-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(246, 239, 226, 0.12);
+  color: var(--cream);
+  font-family: var(--font-sans), sans-serif;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.live-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5cc98a;
+  box-shadow: 0 0 0 3px rgba(92, 201, 138, 0.25);
+}
+.m-label .live-badge {
+  align-self: center;
+  font-family: var(--font-sans), sans-serif;
+  margin-top: 2px;
+  padding: 1px 8px;
+  font-size: 11px;
+}

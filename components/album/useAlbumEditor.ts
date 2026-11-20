@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { BG_DEFS, stickerSize } from './constants';
 import { compressImage } from './image';
 import { eraseAlong, eraserRadius } from './eraser';
+import { mergePages } from './merge';
 import { PAGE_H, PAGE_W } from './types';
 import type { BgId, DragMode, Item, Page, Point, Selection, StickerKind, Stroke } from './types';
 
@@ -353,6 +354,10 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
   const lastSavedRef = useRef(initialPages);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = useRef<Promise<void> | null>(null);
+  /** Identifiant de cet onglet, envoyé avec chaque enregistrement (voir temps réel). */
+  const clientIdRef = useRef(uid());
+  /** Incrémenté à chaque modification reçue d'une autre personne. */
+  const remoteSeqRef = useRef(0);
 
   const save = useCallback(async () => {
     if (timerRef.current) {
@@ -366,10 +371,12 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
       return;
     }
     setSaveState('saving');
+    const seq = remoteSeqRef.current;
     const run = api
-      .savePages(albumId, snapshot)
+      .savePages(albumId, snapshot, clientIdRef.current)
       .then(() => {
-        lastSavedRef.current = snapshot;
+        // Si une modification distante est arrivée pendant l'envoi, elle reste la base de fusion.
+        if (remoteSeqRef.current === seq) lastSavedRef.current = snapshot;
         setSaveState(docRef.current.pages === snapshot ? 'saved' : 'pending');
       })
       .catch((e) => {
@@ -389,6 +396,22 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => void save(), SAVE_DELAY);
   }, [pages, save]);
+
+  /* ----------------------------- Temps réel ----------------------------- */
+
+  /** Applique l'état envoyé par le serveur après la modification d'une autre personne. */
+  const applyRemote = useCallback((remote: Page[]) => {
+    remoteSeqRef.current++;
+    const base = lastSavedRef.current;
+    lastSavedRef.current = remote;
+    // L'historique d'annulation ne correspond plus à l'album : on le vide.
+    setDoc((d) => ({ pages: mergePages(base, d.pages, remote), hist: [] }));
+  }, []);
+
+  // Désélectionne un élément supprimé entre-temps par quelqu'un d'autre.
+  useEffect(() => {
+    if (sel && !pages[sel.p]?.items.some((it) => it.id === sel.id)) setSel(null);
+  }, [pages, sel]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
@@ -417,6 +440,8 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     error,
     clearError: () => setError(null),
     flush: save,
+    clientId: clientIdRef.current,
+    applyRemote,
     undo,
     addSticker,
     addText,

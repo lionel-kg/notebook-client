@@ -53,6 +53,10 @@ export default function AlbumPage() {
         if (canEdit) await flush();
         router.push(isOwner ? '/albums' : '/');
       }}
+      onDeleted={(by) => {
+        window.alert(`Cet album vient d'être supprimé par ${by}.`);
+        router.push('/');
+      }}
     />
   );
 }

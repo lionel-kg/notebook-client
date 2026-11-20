@@ -25,10 +25,26 @@ interface Props {
   owner?: string;
   backLabel?: string;
   loginHref?: string;
+  /** Nombre de personnes qui ont l'album ouvert (temps réel) */
+  viewers?: number;
+  /** Personne qui vient de modifier l'album (affiché quelques secondes) */
+  lastEditor?: string | null;
+}
+
+/** Activité en temps réel : qui vient de modifier, ou combien de personnes regardent. */
+export function LiveBadge({ viewers, lastEditor }: { viewers: number; lastEditor: string | null }) {
+  const text = lastEditor ? `${lastEditor} vient de modifier` : viewers > 1 ? `${viewers} personnes ici` : null;
+  if (!text) return null;
+  return (
+    <span className="live-badge" role="status">
+      <span className="dot" aria-hidden="true" />
+      {text}
+    </span>
+  );
 }
 
 /** Vue ordinateur : le livre ouvert en double page, outils à gauche, stickers à droite. */
-export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref }: Props) {
+export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -195,6 +211,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
               <span className="serif">{title}</span>
               {subtitle && <span className="hand">{subtitle}</span>}
               {owner && <span className="by">par {owner}</span>}
+              <LiveBadge viewers={viewers} lastEditor={lastEditor} />
             </div>
             {readOnly && loginHref && (
               <Link href={loginHref} className="btn">

@@ -74,8 +74,13 @@ export const api = {
   updateAlbum: (id: string, data: Partial<Pick<Album, 'title' | 'subtitle' | 'deskColor'>>) =>
     request<{ album: Album }>(`/albums/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAlbum: (id: string) => request<void>(`/albums/${id}`, { method: 'DELETE' }),
-  savePages: (id: string, pages: Page[]) =>
-    request<{ ok: true; savedAt: string }>(`/albums/${id}/pages`, { method: 'PUT', body: JSON.stringify({ pages }) }),
+  /** `clientId` identifie l'onglet : il ne se renvoie pas à lui-même sa propre modification en temps réel. */
+  savePages: (id: string, pages: Page[], clientId?: string) =>
+    request<{ ok: true; savedAt: string }>(`/albums/${id}/pages`, {
+      method: 'PUT',
+      body: JSON.stringify({ pages }),
+      headers: clientId ? { 'X-Client-Id': clientId } : undefined,
+    }),
   uploadPhoto: (albumId: string, blob: Blob, width: number, height: number) => {
     const fd = new FormData();
     fd.append('width', String(width));
