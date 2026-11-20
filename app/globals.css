@@ -1071,9 +1071,12 @@ textarea.txt:focus {
   opacity: 0.7;
   white-space: nowrap;
 }
-/* Lecture seule sur téléphone : pas de panneau d'outils, la navigation descend en bas d'écran */
-.m-root.ro .m-nav {
-  margin-bottom: calc(12px + env(safe-area-inset-bottom));
+/* Lecture seule sur téléphone : pas de panneau d'outils, bouton de connexion en bas d'écran */
+.m-login {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 4px 16px calc(14px + env(safe-area-inset-bottom));
 }
 .m-title .by {
   flex: 0 1000 auto;

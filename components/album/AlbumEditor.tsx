@@ -28,18 +28,20 @@ interface Props {
   onBack: (flush: () => Promise<void>) => void;
   /** Lecture seule : on feuillette l'album sans pouvoir le modifier (visiteur). */
   readOnly?: boolean;
-  /** Auteur affiché en lecture seule */
+  /** Auteur affiché quand l'album appartient à quelqu'un d'autre */
   owner?: string;
   backLabel?: string;
+  /** Lien « Se connecter pour modifier » proposé aux visiteurs */
+  loginHref?: string;
 }
 
-export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages, onBack, readOnly = false, owner, backLabel }: Props) {
+export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages, onBack, readOnly = false, owner, backLabel, loginHref }: Props) {
   const wide = useWideLayout();
   const editor = useAlbumEditor(albumId, initialPages, wide === false);
 
   if (wide === null) return null;
 
-  const props = { editor, title, subtitle, deskColor, readOnly, owner, backLabel, onBack: () => onBack(editor.flush) };
+  const props = { editor, title, subtitle, deskColor, readOnly, owner, backLabel, loginHref, onBack: () => onBack(editor.flush) };
   return (
     <>
       {wide ? <DesktopEditor {...props} /> : <MobileEditor {...props} />}

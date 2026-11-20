@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
 import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo } from './Icons';
@@ -23,10 +24,11 @@ interface Props {
   readOnly?: boolean;
   owner?: string;
   backLabel?: string;
+  loginHref?: string;
 }
 
 /** Vue ordinateur : le livre ouvert en double page, outils à gauche, stickers à droite. */
-export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums' }: Props) {
+export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -192,8 +194,13 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
             <div className="d-title">
               <span className="serif">{title}</span>
               {subtitle && <span className="hand">{subtitle}</span>}
-              {readOnly && owner && <span className="by">par {owner}</span>}
+              {owner && <span className="by">par {owner}</span>}
             </div>
+            {readOnly && loginHref && (
+              <Link href={loginHref} className="btn">
+                Se connecter pour modifier
+              </Link>
+            )}
             {!readOnly && (
             <div className="row">
               <label className="btn">

@@ -65,7 +65,7 @@ export const api = {
 
   publicAlbums: () => request<{ albums: PublicAlbumSummary[] }>('/public/albums'),
   publicAlbum: (id: string) =>
-    request<{ album: PublicAlbum; pages: Page[]; canEdit: boolean }>(`/public/albums/${encodeURIComponent(id)}`),
+    request<{ album: PublicAlbum; pages: Page[]; canEdit: boolean; isOwner: boolean }>(`/public/albums/${encodeURIComponent(id)}`),
 
   listAlbums: () => request<{ albums: AlbumSummary[] }>('/albums'),
   createAlbum: (title: string, subtitle: string) =>

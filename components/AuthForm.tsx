@@ -25,7 +25,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     try {
       if (isLogin) await api.login(username, password);
       else await api.register(username, password);
-      router.replace('/albums');
+      // Retour à la page d'origine (ex. l'album qu'on voulait modifier), uniquement vers ce site.
+      const next = new URLSearchParams(window.location.search).get('next');
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/albums');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Impossible de joindre le serveur');
       setBusy(false);

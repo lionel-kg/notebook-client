@@ -7,11 +7,11 @@ import { api, ApiError, type PublicAlbum } from '@/lib/api';
 import { AlbumEditor } from '@/components/album/AlbumEditor';
 import type { Page } from '@/components/album/types';
 
-/** Album public : l'auteur le modifie, tout le monde peut le feuilleter sans compte. */
+/** Album public : tout le monde le feuillette ; toute personne connectée peut le modifier. */
 export default function AlbumPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
-  const [data, setData] = useState<{ album: PublicAlbum; pages: Page[]; canEdit: boolean } | null>(null);
+  const [data, setData] = useState<{ album: PublicAlbum; pages: Page[]; canEdit: boolean; isOwner: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function AlbumPage() {
 
   if (!data) return <div className="desk-fill" />;
 
-  const { album, pages, canEdit } = data;
+  const { album, pages, canEdit, isOwner } = data;
   return (
     <AlbumEditor
       albumId={album.id}
@@ -46,11 +46,12 @@ export default function AlbumPage() {
       deskColor={album.deskColor}
       initialPages={pages}
       readOnly={!canEdit}
-      owner={album.owner}
-      backLabel={canEdit ? 'Albums' : 'Galerie'}
+      owner={isOwner ? undefined : album.owner}
+      backLabel={isOwner ? 'Albums' : 'Galerie'}
+      loginHref={`/login?next=${encodeURIComponent(`/albums/${album.id}`)}`}
       onBack={async (flush) => {
         if (canEdit) await flush();
-        router.push(canEdit ? '/albums' : '/');
+        router.push(isOwner ? '/albums' : '/');
       }}
     />
   );

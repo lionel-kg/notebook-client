@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react';
 import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
 import {
@@ -39,10 +40,11 @@ interface Props {
   readOnly?: boolean;
   owner?: string;
   backLabel?: string;
+  loginHref?: string;
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -140,13 +142,13 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
   return (
     <div className={readOnly ? 'm-root ro' : 'm-root'} style={{ backgroundColor: deskColor }}>
       <header className="m-head">
-        <button type="button" className="ic" onClick={onBack} aria-label={readOnly ? "Retour à la galerie" : "Retour à mes albums"}>
+        <button type="button" className="ic" onClick={onBack} aria-label={backLabel === 'Galerie' ? 'Retour à la galerie' : 'Retour à mes albums'}>
           <IconBack size={22} />
         </button>
         <div className="m-title">
           <span className="serif">{title}</span>
           {subtitle && <span className="hand">{subtitle}</span>}
-          {readOnly && owner && <span className="by">par {owner}</span>}
+          {owner && <span className="by">par {owner}</span>}
         </div>
         {!readOnly && (
           <>
@@ -250,6 +252,14 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
           </div>
         )}
       </div>
+
+      {readOnly && loginHref && (
+        <div className="m-login">
+          <Link href={loginHref} className="btn">
+            Se connecter pour modifier
+          </Link>
+        </div>
+      )}
 
       {!readOnly && (
       <div className="m-sheet">
