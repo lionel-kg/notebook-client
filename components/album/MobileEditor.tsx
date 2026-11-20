@@ -138,7 +138,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
   );
 
   return (
-    <div className="m-root" style={{ backgroundColor: deskColor }}>
+    <div className={readOnly ? 'm-root ro' : 'm-root'} style={{ backgroundColor: deskColor }}>
       <header className="m-head">
         <button type="button" className="ic" onClick={onBack} aria-label={`Retour à ${backLabel.toLowerCase()}`}>
           <IconBack size={22} />

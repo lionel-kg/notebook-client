@@ -1061,3 +1061,17 @@ textarea.txt:focus {
   font-size: 22px;
   cursor: pointer;
 }
+
+/* Auteur affiché quand on feuillette l'album d'une autre personne */
+.d-title .by,
+.m-title .by {
+  flex: none;
+  font-size: 14px;
+  color: var(--cream);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+/* Lecture seule sur téléphone : pas de panneau d'outils, la navigation descend en bas d'écran */
+.m-root.ro .m-nav {
+  margin-bottom: calc(12px + env(safe-area-inset-bottom));
+}

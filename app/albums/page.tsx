@@ -61,9 +61,14 @@ export default function AlbumsPage() {
           <span className="serif">Mes albums</span>
           <span className="hand">bonjour {user.username}</span>
         </div>
-        <button type="button" className="btn ghost" onClick={logout}>
-          Se déconnecter
-        </button>
+        <div className="row">
+          <Link href="/" className="btn ghost">
+            Galerie publique
+          </Link>
+          <button type="button" className="btn ghost" onClick={logout}>
+            Se déconnecter
+          </button>
+        </div>
       </header>
 
       {error && (
