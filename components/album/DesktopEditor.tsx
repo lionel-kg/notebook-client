@@ -140,7 +140,7 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
         tool={tool}
         selId={sel && sel.p === p ? sel.id : null}
         live={editor.live && editor.live.p === p ? { pts: editor.live.pts, color: editor.color, size: editor.size } : null}
-        showEmptyHint={inner}
+        showEmptyHint={!readOnly && inner}
         pageNum={inner ? String(real) : undefined}
         style={{ transform: isFront ? 'none' : 'rotateY(180deg)', boxShadow: shade + activeRing, borderRadius: radius }}
         onPageDown={() => {

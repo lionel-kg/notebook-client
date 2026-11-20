@@ -42,7 +42,7 @@ interface Props {
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'mes albums' }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -140,7 +140,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
   return (
     <div className={readOnly ? 'm-root ro' : 'm-root'} style={{ backgroundColor: deskColor }}>
       <header className="m-head">
-        <button type="button" className="ic" onClick={onBack} aria-label={`Retour à ${backLabel.toLowerCase()}`}>
+        <button type="button" className="ic" onClick={onBack} aria-label={readOnly ? "Retour à la galerie" : "Retour à mes albums"}>
           <IconBack size={22} />
         </button>
         <div className="m-title">
@@ -176,7 +176,7 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
                   tool={tool}
                   selId={sel && sel.p === i ? sel.id : null}
                   live={editor.live && editor.live.p === i ? { pts: editor.live.pts, color: editor.color, size: editor.size } : null}
-                  showEmptyHint={inner}
+                  showEmptyHint={!readOnly && inner}
                   style={{
                     transform: `rotateY(${i < cur ? -180 : 0}deg)`,
                     zIndex: flipping === i ? n + 10 : i < cur ? i + 1 : n - i,

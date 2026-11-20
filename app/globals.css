@@ -1075,3 +1075,10 @@ textarea.txt:focus {
 .m-root.ro .m-nav {
   margin-bottom: calc(12px + env(safe-area-inset-bottom));
 }
+.m-title .by {
+  flex: 0 1000 auto;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
