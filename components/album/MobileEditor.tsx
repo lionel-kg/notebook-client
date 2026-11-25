@@ -28,6 +28,7 @@ import { SaveStatus } from './SaveStatus';
 import { StickerArt } from './Sticker';
 import { FontPicker, TextArea } from './TextEditor';
 import { blankPage, type AlbumEditor } from './useAlbumEditor';
+import { usePanZoom, usePinchZoom } from './usePanZoom';
 import { PAGE_H, PAGE_W } from './types';
 import type { Tool } from './types';
 
@@ -77,6 +78,10 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
 
   /* ---------- Taille de la page selon l'espace disponible ---------- */
   const stageRef = useRef<HTMLDivElement>(null);
+
+  /* ---------- Zoom : pincer à deux doigts (annule le trait commencé par le premier doigt) ---------- */
+  const pz = usePanZoom(4);
+  usePinchZoom(pz, editor.cancelGesture);
   const [s, setS] = useState(0.8);
   useLayoutEffect(() => {
     const el = stageRef.current;
@@ -177,8 +182,25 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
         )}
       </header>
 
-      <div className="m-stage" ref={stageRef}>
-        <div className="m-book" style={{ width: PAGE_W * s + 6, height: PAGE_H * s + 6 }}>
+      <div
+        className="m-stage"
+        ref={(el) => {
+          stageRef.current = el;
+          pz.viewportRef.current = el;
+        }}
+      >
+        {pz.zoomed && (
+          <button type="button" className="m-zoom-reset" onClick={pz.reset} aria-label="Revenir à la taille normale">
+            {Math.round(pz.s * 100)} % ×
+          </button>
+        )}
+        <div
+          className="m-book"
+          ref={(el) => {
+            pz.contentRef.current = el;
+          }}
+          style={{ width: PAGE_W * s + 6, height: PAGE_H * s + 6, transform: pz.transform }}
+        >
           <div className="m-book-inner" style={{ transform: `scale(${s})` }}>
             <div className="m-depth" style={{ left: 6, top: 6, background: '#e2d6c0', boxShadow: '0 14px 30px rgba(0,0,0,.35)' }} />
             <div className="m-depth" style={{ left: 3, top: 3, background: '#ece2cf' }} />
@@ -208,7 +230,9 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
                   onPageDown={(e) => {
                     if (tool !== 'move' || flipping !== null || i !== cur) return;
                     editor.setSel(null);
-                    editor.swipeDown(e, go);
+                    // Zoomé : un doigt déplace la vue (les flèches tournent la page)
+                    if (pz.zoomed) pz.panDown(e);
+                    else editor.swipeDown(e, go);
                   }}
                   onPhotoClick={readOnly && isVisible ? onPhotoClick : undefined}
                   onItemDown={(e, id, mode) => {

@@ -123,3 +123,15 @@ export const IconClose = ({ size }: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Svg>
 );
+export const IconZoomIn = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-4-4M8 11h6M11 8v6" />
+  </Svg>
+);
+export const IconZoomOut = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-4-4M8 11h6" />
+  </Svg>
+);

@@ -540,7 +540,21 @@ textarea.txt:focus {
   top: 100px;
   width: 920px;
   height: 600px;
+}
+/* Zoomé : la vue est découpée à la zone du livre */
+.book-wrap.zoomed {
+  overflow: hidden;
+  border-radius: 12px;
+}
+.book-wrap.panning,
+.book-wrap.panning * {
+  cursor: grab !important;
+}
+.zoom-layer {
+  position: absolute;
+  inset: 0;
   perspective: 2800px;
+  transform-origin: center;
 }
 .book {
   position: absolute;
@@ -681,8 +695,11 @@ textarea.txt:focus {
 }
 
 .m-stage {
+  position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1201,4 +1218,78 @@ textarea.txt:focus {
   .lightbox {
     animation: none;
   }
+}
+
+/* Zoom sur le livre */
+.m-book {
+  transform-origin: center;
+}
+.d-zoom {
+  position: absolute;
+  left: 20px;
+  top: 732px;
+  width: 108px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 999px;
+  background: rgba(246, 239, 226, 0.12);
+  color: var(--cream);
+}
+.d-zoom button {
+  height: 36px;
+  min-width: 30px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.d-zoom button.pct {
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.d-zoom button:hover:not(:disabled) {
+  background: rgba(246, 239, 226, 0.15);
+}
+.d-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.d-zoom button.pct:disabled {
+  opacity: 0.75;
+}
+.m-zoom-reset {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 50;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(43, 51, 64, 0.85);
+  color: var(--cream);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-zoom {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  display: flex;
+  gap: 8px;
+}
+.lb-zoom .lb-btn {
+  position: static;
+}
+.lightbox img {
+  transform-origin: center;
+  will-change: transform;
 }

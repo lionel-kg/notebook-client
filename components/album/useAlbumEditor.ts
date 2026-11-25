@@ -12,10 +12,12 @@ import type { BgId, DragMode, Item, Page, Point, Selection, StickerKind, Stroke 
 
 export type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
+type Doc = { pages: Page[]; hist: Page[][] };
+
 type Session =
-  | { kind: 'item'; p: number; id: string; mode: DragMode; rect: DOMRect; start: Point; orig: Item; pushed: boolean }
+  | { kind: 'item'; p: number; id: string; mode: DragMode; rect: DOMRect; start: Point; orig: Item; pushed: boolean; startDoc: Doc }
   | { kind: 'draw'; p: number; rect: DOMRect }
-  | { kind: 'erase'; p: number; rect: DOMRect; touch: boolean; last: Point; startPages: Page[] }
+  | { kind: 'erase'; p: number; rect: DOMRect; touch: boolean; last: Point; startPages: Page[]; startDoc: Doc }
   | { kind: 'swipe'; x: number; y: number; lx: number; ly: number; onSwipe: (dir: 1 | -1) => void };
 
 const HISTORY_MAX = 40;
@@ -36,7 +38,7 @@ function updItem(pages: Page[], p: number, id: string, patch: Partial<Item>): Pa
 }
 
 export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boolean) {
-  const [doc, setDoc] = useState<{ pages: Page[]; hist: Page[][] }>({ pages: initialPages, hist: [] });
+  const [doc, setDoc] = useState<Doc>({ pages: initialPages, hist: [] });
   const [sel, setSel] = useState<Selection | null>(null);
   const [live, setLive] = useState<{ p: number; pts: Point[] } | null>(null);
   const [color, setColorState] = useState('#2b2b2b');
@@ -313,14 +315,15 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     const pageEl = (e.currentTarget as HTMLElement).closest('[data-page]');
     if (!pageEl) return null;
     const rect = pageEl.getBoundingClientRect();
-    const it = docRef.current.pages[p]?.items.find((x) => x.id === id);
+    const startDoc = docRef.current;
+    const it = startDoc.pages[p]?.items.find((x) => x.id === id);
     if (!it) return null;
     const items = docRef.current.pages[p].items;
     if (mode === 'move' && items[items.length - 1].id !== id) {
       // Passe l'élément au premier plan (sans entrée d'historique).
       mutate((pgs) => pgs.map((pg, i) => (i !== p ? pg : { ...pg, items: [...pg.items.filter((x) => x.id !== id), it] })), false);
     }
-    sessRef.current = { kind: 'item', p, id, mode, rect, start: localFrom(rect, e), orig: { ...it }, pushed: false };
+    sessRef.current = { kind: 'item', p, id, mode, rect, start: localFrom(rect, e), orig: { ...it }, pushed: false, startDoc };
     setSel({ p, id });
     attach();
     return it;
@@ -334,13 +337,23 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const pt = localFrom(rect, e);
     if (pen === 'erase') {
-      sessRef.current = { kind: 'erase', p, rect, touch, last: pt, startPages: docRef.current.pages };
+      sessRef.current = { kind: 'erase', p, rect, touch, last: pt, startPages: docRef.current.pages, startDoc: docRef.current };
       eraseAt(pt);
     } else {
       sessRef.current = { kind: 'draw', p, rect };
       setLive({ p, pts: [pt] });
     }
     attach();
+  };
+
+  /** Annule le geste en cours sans le garder (ex. un deuxième doigt arrive : c'est un pincement pour zoomer). */
+  const cancelGesture = () => {
+    const s = sessRef.current;
+    detach();
+    sessRef.current = null;
+    if (!s) return;
+    if (s.kind === 'draw') setLive(null);
+    else if (s.kind === 'erase' || s.kind === 'item') setDoc(s.startDoc);
   };
 
   /** Glissement horizontal sur la page pour la tourner (téléphone / tablette). */
@@ -455,6 +468,7 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     itemDown,
     inkDown,
     swipeDown,
+    cancelGesture,
   };
 }
 

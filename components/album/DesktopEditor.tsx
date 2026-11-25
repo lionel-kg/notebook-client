@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
-import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconEye, IconPencil, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo } from './Icons';
+import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconEye, IconPencil, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo, IconZoomIn, IconZoomOut } from './Icons';
 import { PageView } from './PageView';
 import { SaveStatus } from './SaveStatus';
 import { StickerArt } from './Sticker';
 import { FontPicker, TextArea } from './TextEditor';
 import { blankPage, type AlbumEditor } from './useAlbumEditor';
+import { usePanZoom, usePinchZoom, useWheelZoom } from './usePanZoom';
 import type { Tool } from './types';
 
 const STAGE_W = 1280;
@@ -131,6 +132,29 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
   const label = kk === 0 ? 'Couverture' : kk === L ? 'Dos de l’album' : `Pages ${2 * kk - 1} – ${2 * kk}`;
 
   /* ---------- Mise à l'échelle de la scène pour remplir la fenêtre ---------- */
+  /* ---------- Zoom sur le livre (précision pour dessiner) ---------- */
+  const pz = usePanZoom(4);
+  useWheelZoom(pz); // Ctrl/⌘ + molette ou pincement du trackpad ; molette seule = se déplacer
+  usePinchZoom(pz, editor.cancelGesture); // écrans tactiles larges (tablette à l'horizontale)
+  // Espace maintenu (ou bouton du milieu) : glisser pour se déplacer, même avec le pinceau
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  useEffect(() => {
+    const typing = (e: KeyboardEvent) => (e.target as HTMLElement)?.closest?.('input, textarea, [contenteditable]');
+    const down = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !typing(e)) {
+        if (pz.zoomed) e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const up = (e: KeyboardEvent) => e.code === 'Space' && setSpaceHeld(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, [pz.zoomed]);
+
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const fit = () => setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H));
@@ -165,7 +189,9 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
         showEmptyHint={!readOnly && inner}
         pageNum={inner ? String(real) : undefined}
         style={{ transform: isFront ? 'none' : 'rotateY(180deg)', boxShadow: shade + activeRing, borderRadius: radius }}
-        onPageDown={() => {
+        onPageDown={(e) => {
+          // Zoomé : glisser sur la page (hors élément) déplace la vue
+          if (pz.zoomed && (readOnly || tool === 'move')) pz.panDown(e);
           if (tool === 'move' && isVisible && real !== null) {
             setActive(real);
             editor.setSel(null);
@@ -327,10 +353,37 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
           )}
 
           {/* Livre */}
-          <div className="book-wrap">
-            <div className="book" style={{ transform: `translateX(${kk === 0 ? -230 : kk === L ? 230 : 0}px)` }}>
-              {leaves}
+          <div
+            ref={pz.viewportRef}
+            className={`book-wrap${pz.zoomed ? ' zoomed' : ''}${pz.zoomed && spaceHeld ? ' panning' : ''}`}
+            onPointerDownCapture={(e) => {
+              if (pz.zoomed && (spaceHeld || e.button === 1)) pz.panDown(e);
+            }}
+          >
+            <div
+              ref={(el) => {
+                pz.contentRef.current = el;
+              }}
+              className="zoom-layer"
+              style={{ transform: pz.transform }}
+            >
+              <div className="book" style={{ transform: `translateX(${kk === 0 ? -230 : kk === L ? 230 : 0}px)` }}>
+                {leaves}
+              </div>
             </div>
+          </div>
+
+          {/* Zoom */}
+          <div className="d-zoom" role="group" aria-label="Zoom">
+            <button type="button" onClick={() => pz.zoomBy(1 / 1.5)} disabled={!pz.zoomed} aria-label="Dézoomer">
+              <IconZoomOut size={18} />
+            </button>
+            <button type="button" className="pct" onClick={pz.reset} disabled={!pz.zoomed} aria-label="Taille normale" title="Taille normale">
+              {Math.round(pz.s * 100)} %
+            </button>
+            <button type="button" onClick={() => pz.zoomBy(1.5)} disabled={pz.s >= 4} aria-label="Zoomer">
+              <IconZoomIn size={18} />
+            </button>
           </div>
 
           {/* Navigation */}
