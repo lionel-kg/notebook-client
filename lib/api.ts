@@ -94,3 +94,22 @@ export const api = {
 };
 
 export const photoUrl = (photoId: string) => `/api/photos/${photoId}`;
+export const stickerUrl = (stickerId: string) => `/api/stickers/${stickerId}/image`;
+
+export interface CustomSticker {
+  id: string;
+  width: number;
+  height: number;
+}
+
+export const stickersApi = {
+  list: () => request<{ stickers: CustomSticker[] }>('/stickers'),
+  create: (blob: Blob, width: number, height: number) => {
+    const fd = new FormData();
+    fd.append('width', String(width));
+    fd.append('height', String(height));
+    fd.append('image', blob, blob.type === 'image/png' ? 'sticker.png' : 'sticker.webp');
+    return request<{ sticker: CustomSticker }>('/stickers', { method: 'POST', body: fd });
+  },
+  remove: (id: string) => request<void>(`/stickers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+};

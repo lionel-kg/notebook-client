@@ -1,5 +1,8 @@
 export type BgId = 'creme' | 'kraft' | 'blanc' | 'quadrille' | 'ligne' | 'toile';
-export type StickerKind = 'heart' | 'plane' | 'sun' | 'star' | 'camera' | 'flower' | 'post' | 'love' | 'tag' | 'tape';
+export type StickerKind =
+  | 'heart' | 'plane' | 'sun' | 'star' | 'camera' | 'flower' | 'post' | 'love' | 'tag' | 'tape'
+  | 'suitcase' | 'palm' | 'pin' | 'ticket' | 'compass' | 'mountain' | 'wave' | 'icecream'
+  | 'coffee' | 'moon' | 'cloud' | 'rainbow' | 'butterfly' | 'sparkle' | 'souvenir' | 'bisous';
 export type Font = 'hand' | 'serif';
 export type Tool = 'move' | 'draw' | 'erase';
 export type DragMode = 'move' | 'size' | 'rot';
@@ -10,6 +13,8 @@ interface ItemBase {
   y: number;
   w: number;
   r: number;
+  /** Verrouillé : ni déplacement, ni redimensionnement, ni rotation, ni suppression */
+  locked?: boolean;
 }
 
 export interface PhotoItem extends ItemBase {
@@ -25,6 +30,13 @@ export interface StickerItem extends ItemBase {
   kind: StickerKind;
 }
 
+/** Sticker personnalisé, créé par quelqu'un à partir de sa propre image */
+export interface CustomItem extends ItemBase {
+  type: 'custom';
+  h: number;
+  stickerId: string;
+}
+
 export interface TextItem extends ItemBase {
   type: 'text';
   text: string;
@@ -33,7 +45,7 @@ export interface TextItem extends ItemBase {
   font: Font;
 }
 
-export type Item = PhotoItem | StickerItem | TextItem;
+export type Item = PhotoItem | StickerItem | CustomItem | TextItem;
 
 export interface Point {
   x: number;

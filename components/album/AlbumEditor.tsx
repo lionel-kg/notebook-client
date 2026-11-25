@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { DesktopEditor } from './DesktopEditor';
+import { ExportStage } from './ExportStage';
+import { canShareFile, downloadBlob, pagesToPdf, pageToPng, slugify } from './exportAlbum';
 import { MobileEditor } from './MobileEditor';
 import { PhotoLightbox } from './PhotoLightbox';
 import { useAlbumEditor } from './useAlbumEditor';
@@ -72,6 +74,36 @@ export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages,
     },
   });
 
+  /* ---------- Export : album en PDF, page en image ---------- */
+  type Job = { kind: 'pdf' | 'png'; indices: number[]; done: number };
+  const [job, setJob] = useState<Job | null>(null);
+  const jobRef = useRef(job);
+  jobRef.current = job;
+  // Sur téléphone, le fichier prêt est proposé au partage (le geste de l'utilisateur est requis).
+  const [readyFile, setReadyFile] = useState<File | null>(null);
+  const pageName = (i: number) => (i === 0 ? 'couverture' : i === editor.pages.length - 1 ? 'dos' : `page-${i}`);
+
+  const startExport = (kind: Job['kind'], indices: number[]) => {
+    if (jobRef.current) return;
+    setReadyFile(null);
+    setJob({ kind, indices, done: 0 });
+  };
+  const onStageReady = async (nodes: HTMLElement[]) => {
+    const j = jobRef.current;
+    if (!j) return;
+    try {
+      const name = j.kind === 'pdf' ? `${slugify(title)}.pdf` : `${slugify(title)}-${pageName(j.indices[0])}.png`;
+      const blob = j.kind === 'pdf' ? await pagesToPdf(nodes, title, (done) => setJob((cur) => cur && { ...cur, done })) : await pageToPng(nodes[0]);
+      const file = new File([blob], name, { type: blob.type });
+      if (window.matchMedia('(pointer: coarse)').matches && canShareFile(file)) setReadyFile(file);
+      else downloadBlob(blob, name);
+    } catch {
+      editor.showError("L'export a échoué, réessaie");
+    } finally {
+      setJob(null);
+    }
+  };
+
   if (wide === null) return null;
 
   const props = {
@@ -87,6 +119,9 @@ export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages,
     lastEditor: live.lastEditor,
     onToggleMode: canEdit ? toggleMode : undefined,
     onPhotoClick: setViewing,
+    exporting: !!job,
+    onExportPdf: () => startExport('pdf', editor.pages.map((_, i) => i)),
+    onExportPage: (i: number) => startExport('png', [i]),
     onBack: () => onBack(editor.flush),
   };
   return (
@@ -94,6 +129,43 @@ export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages,
       {wide ? <DesktopEditor {...props} /> : <MobileEditor {...props} />}
       {!editing && viewIndex !== -1 && (
         <PhotoLightbox photos={photos} index={viewIndex} onIndex={(i) => setViewing(photos[i])} onClose={() => setViewing(null)} />
+      )}
+      {job && (
+        <>
+          <ExportStage pages={editor.pages} indices={job.indices} total={editor.pages.length} onReady={onStageReady} />
+          <div className="export-overlay" role="status">
+            <span className="spin" aria-hidden="true" />
+            {job.kind === 'pdf' ? `Création du PDF… ${job.done} / ${job.indices.length}` : "Création de l'image…"}
+          </div>
+        </>
+      )}
+      {readyFile && (
+        <div className="toast export-ready" role="dialog" aria-label="Export prêt">
+          <span>{readyFile.type === 'application/pdf' ? 'Ton PDF est prêt' : 'Ton image est prête'}</span>
+          <button
+            type="button"
+            className="chip"
+            onClick={() => {
+              navigator.share({ files: [readyFile], title }).catch(() => undefined);
+              setReadyFile(null);
+            }}
+          >
+            Partager
+          </button>
+          <button
+            type="button"
+            className="chip"
+            onClick={() => {
+              downloadBlob(readyFile, readyFile.name);
+              setReadyFile(null);
+            }}
+          >
+            Enregistrer
+          </button>
+          <button type="button" onClick={() => setReadyFile(null)} aria-label="Fermer">
+            ×
+          </button>
+        </div>
       )}
       {editor.error && (
         <div className="toast" role="alert">

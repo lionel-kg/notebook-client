@@ -135,3 +135,50 @@ export const IconZoomOut = ({ size }: P) => (
     <path d="M20 20l-4-4M8 11h6" />
   </Svg>
 );
+export const IconDownload = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+  </Svg>
+);
+export const IconCopy = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+  </Svg>
+);
+export const IconDuplicate = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="8" y="8" width="12" height="12" rx="2" />
+    <path d="M4 16V6a2 2 0 0 1 2-2h10M14 11v6M11 14h6" />
+  </Svg>
+);
+export const IconPaste = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="5" y="5" width="14" height="16" rx="2" />
+    <path d="M9 5V3h6v2M9 12h6M9 16h4" />
+  </Svg>
+);
+export const IconToFront = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="3" y="11" width="10" height="10" rx="1.5" opacity=".45" />
+    <rect x="9" y="3" width="12" height="12" rx="1.5" fill="currentColor" fillOpacity=".25" />
+  </Svg>
+);
+export const IconToBack = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="9" y="3" width="12" height="12" rx="1.5" opacity=".45" />
+    <rect x="3" y="11" width="10" height="10" rx="1.5" fill="currentColor" fillOpacity=".25" />
+  </Svg>
+);
+export const IconLock = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </Svg>
+);
+export const IconUnlock = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 7.5-2" />
+  </Svg>
+);

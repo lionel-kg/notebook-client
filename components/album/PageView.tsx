@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import { photoUrl } from '@/lib/api';
+import { photoUrl, stickerUrl } from '@/lib/api';
 import { BG_DEFS } from './constants';
 import { eraserRadius } from './eraser';
 import { StickerArt } from './Sticker';
@@ -122,7 +122,7 @@ export function PageView({
               height: it.type === 'text' ? 'auto' : it.h,
               transform: `rotate(${it.r}deg)`,
               zIndex: n + 1,
-              outline: isSel ? `${touch ? 3 : 2}px dashed #2d6cc0` : 'none',
+              outline: isSel ? `${touch ? 3 : 2}px dashed ${it.locked ? '#8a7b6a' : '#2d6cc0'}` : 'none',
               outlineOffset: 5,
               pointerEvents: (interactive && tool === 'move') || zoomable ? 'auto' : 'none',
               cursor: zoomable ? 'zoom-in' : undefined,
@@ -147,7 +147,19 @@ export function PageView({
               </div>
             )}
             {it.type === 'sticker' && <StickerArt kind={it.kind} className="stk" />}
-            {isSel && (
+            {it.type === 'custom' && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={stickerUrl(it.stickerId)} alt="" className="stk custom-stk" draggable={false} />
+            )}
+            {isSel && it.locked && (
+              <span className="lock-badge" aria-label="Élément verrouillé">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+              </span>
+            )}
+            {isSel && !it.locked && (
               <>
                 <button
                   type="button"

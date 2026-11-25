@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { api } from '@/lib/api';
+import { api, photoUrl, type CustomSticker } from '@/lib/api';
+import { clipboard } from './clipboard';
 import { BG_DEFS, stickerSize } from './constants';
-import { compressImage } from './image';
+import { compressImage, fetchImage } from './image';
 import { eraseAlong, eraserRadius } from './eraser';
 import { mergePages } from './merge';
 import { PAGE_H, PAGE_W } from './types';
@@ -30,6 +31,10 @@ function localFrom(rect: DOMRect, e: { clientX: number; clientY: number }): Poin
   const sc = rect.width / PAGE_W || 1;
   return { x: (e.clientX - rect.left) / sc, y: (e.clientY - rect.top) / sc };
 }
+
+/** Garde un élément au moins en partie sur la page. */
+const clampX = (x: number, w: number) => Math.round(Math.max(-w / 2, Math.min(PAGE_W - w / 2, x)));
+const clampY = (y: number, h: number) => Math.round(Math.max(-h / 2, Math.min(PAGE_H - h / 2, y)));
 
 function updItem(pages: Page[], p: number, id: string, patch: Partial<Item>): Page[] {
   return pages.map((pg, i) =>
@@ -116,7 +121,9 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     ]);
   };
 
-  const addPhotos = async (p: number, files: File[]) => {
+  /** `at` : point de dépôt (glisser-déposer), en coordonnées de page — sinon position au hasard. */
+  const addPhotos = async (p: number, files: File[], at?: Point) => {
+    files = files.filter((f) => f.type.startsWith('image/'));
     if (!files.length) return;
     setUploading((u) => u + files.length);
     setError(null);
@@ -131,12 +138,13 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
         const s = Math.min(box / img.width, box / img.height);
         const w = Math.round(img.width * s) + pad;
         const h = Math.round(img.height * s) + pad;
+        const k = items.length * 24; // plusieurs photos déposées : légèrement décalées
         items.push({
           id: uid(),
           type: 'photo',
           photoId: photo.id,
-          x: Math.round(20 + Math.random() * Math.max(0, PAGE_W - w - 40)),
-          y: Math.round(20 + Math.random() * Math.max(0, PAGE_H - h - 50)),
+          x: at ? clampX(at.x - w / 2 + k, w) : Math.round(20 + Math.random() * Math.max(0, PAGE_W - w - 40)),
+          y: at ? clampY(at.y - h / 2 + k, h) : Math.round(20 + Math.random() * Math.max(0, PAGE_H - h - 50)),
           w,
           h,
           r: Math.round(Math.random() * 10 - 5),
@@ -152,14 +160,105 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
   };
 
   const patchSel = (patch: Partial<Item>, withHist = true) => {
-    if (!sel) return;
+    if (!sel || selItem()?.locked) return; // élément verrouillé : rien ne bouge
     mutate((pgs) => updItem(pgs, sel.p, sel.id, patch), withHist);
   };
 
   const delSel = () => {
-    if (!sel) return;
+    if (!sel || selItem()?.locked) return;
     mutate((pgs) => pgs.map((pg, i) => (i !== sel.p ? pg : { ...pg, items: pg.items.filter((it) => it.id !== sel.id) })), true);
     setSel(null);
+  };
+
+  /* ----------------------------- Plans, verrou, copie ----------------------------- */
+
+  const moveSelInStack = (toFront: boolean) => {
+    if (!sel) return;
+    const { p, id } = sel;
+    mutate((pgs) =>
+      pgs.map((pg, i) => {
+        if (i !== p) return pg;
+        const it = pg.items.find((x) => x.id === id);
+        if (!it) return pg;
+        const rest = pg.items.filter((x) => x.id !== id);
+        const items = toFront ? [...rest, it] : [it, ...rest];
+        return items.every((x, k) => x === pg.items[k]) ? pg : { ...pg, items };
+      }),
+      true,
+    );
+  };
+  const bringToFront = () => moveSelInStack(true);
+  const sendToBack = () => moveSelInStack(false);
+
+  const toggleLock = () => {
+    const it = selItem();
+    if (!sel || !it) return;
+    mutate((pgs) => updItem(pgs, sel.p, sel.id, { locked: !it.locked }), true);
+  };
+
+  /** Place une copie d'élément sur la page `p` (décalée si elle recouvrirait l'original). */
+  const placeCopy = (p: number, src: Item) => {
+    const items = docRef.current.pages[p]?.items ?? [];
+    const h = src.type === 'text' ? 0 : src.h;
+    let { x, y } = src;
+    while (items.some((it) => Math.abs(it.x - x) < 4 && Math.abs(it.y - y) < 4)) {
+      x += 20;
+      y += 20;
+    }
+    const copy = { ...src, id: uid(), x: clampX(x, src.w), y: clampY(y, h || 40), locked: undefined } as Item;
+    addItems(p, [copy]);
+  };
+
+  const duplicateSel = () => {
+    const it = selItem();
+    if (sel && it) placeCopy(sel.p, it);
+  };
+
+  const copySel = () => {
+    const it = selItem();
+    if (it) clipboard.set({ albumId, item: it });
+  };
+
+  /** Colle l'élément copié sur la page `p`. Une photo d'un autre album y est d'abord renvoyée. */
+  const paste = async (p: number) => {
+    const entry = clipboard.get();
+    if (!entry) return;
+    let src = entry.item;
+    if (src.type === 'photo' && entry.albumId !== albumId) {
+      setUploading((u) => u + 1);
+      try {
+        const img = await fetchImage(photoUrl(src.photoId));
+        if (!img) throw new Error('Photo introuvable');
+        const { photo } = await api.uploadPhoto(albumId, img.blob, img.width, img.height);
+        src = { ...src, photoId: photo.id };
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Impossible de coller la photo');
+        return;
+      } finally {
+        setUploading((u) => u - 1);
+      }
+    }
+    placeCopy(p, src);
+  };
+
+  /** Colle un sticker personnalisé au milieu de la page (≈ 120 px de côté). */
+  const addCustomSticker = (p: number, st: CustomSticker) => {
+    const target = touch ? 140 : 120;
+    const k = target / Math.max(st.width, st.height);
+    const w = Math.max(20, Math.round(st.width * k));
+    const h = Math.max(20, Math.round(st.height * k));
+    addItems(p, [
+      {
+        id: uid(),
+        type: 'custom',
+        stickerId: st.id,
+        x: Math.round(PAGE_W / 2 - w / 2 + (Math.random() * 2 - 1) * 70),
+        y: Math.round(PAGE_H / 2 - h / 2 + (Math.random() * 2 - 1) * 90),
+        w,
+        h,
+        r: Math.round(Math.random() * 12 - 6),
+      },
+    ]);
   };
 
   const rotateSel = (deg: number) => {
@@ -318,11 +417,9 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     const startDoc = docRef.current;
     const it = startDoc.pages[p]?.items.find((x) => x.id === id);
     if (!it) return null;
-    const items = docRef.current.pages[p].items;
-    if (mode === 'move' && items[items.length - 1].id !== id) {
-      // Passe l'élément au premier plan (sans entrée d'historique).
-      mutate((pgs) => pgs.map((pg, i) => (i !== p ? pg : { ...pg, items: [...pg.items.filter((x) => x.id !== id), it] })), false);
-    }
+    setSel({ p, id });
+    // Verrouillé : on le sélectionne (pour pouvoir le déverrouiller) sans le déplacer.
+    if (it.locked) return it;
     sessRef.current = { kind: 'item', p, id, mode, rect, start: localFrom(rect, e), orig: { ...it }, pushed: false, startDoc };
     setSel({ p, id });
     attach();
@@ -452,7 +549,15 @@ export function useAlbumEditor(albumId: string, initialPages: Page[], touch: boo
     saveState,
     error,
     clearError: () => setError(null),
+    showError: (message: string) => setError(message),
     flush: save,
+    bringToFront,
+    sendToBack,
+    toggleLock,
+    duplicateSel,
+    copySel,
+    paste,
+    addCustomSticker,
     clientId: clientIdRef.current,
     applyRemote,
     undo,

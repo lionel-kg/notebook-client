@@ -2,11 +2,37 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
-import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconEye, IconPencil, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo, IconZoomIn, IconZoomOut } from './Icons';
+import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES } from './constants';
+import { useHasClipboard } from './clipboard';
+import { ExportMenu } from './ExportMenu';
+import {
+  IconBack,
+  IconBrush,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCopy,
+  IconCursor,
+  IconDuplicate,
+  IconEraser,
+  IconEye,
+  IconLock,
+  IconPaste,
+  IconPencil,
+  IconPhoto,
+  IconPlus,
+  IconRedoRot,
+  IconText,
+  IconToBack,
+  IconToFront,
+  IconTrash,
+  IconUndo,
+  IconUnlock,
+  IconZoomIn,
+  IconZoomOut,
+} from './Icons';
 import { PageView } from './PageView';
 import { SaveStatus } from './SaveStatus';
-import { StickerArt } from './Sticker';
+import { StickerPalette } from './StickerPalette';
 import { FontPicker, TextArea } from './TextEditor';
 import { blankPage, type AlbumEditor } from './useAlbumEditor';
 import { usePanZoom, usePinchZoom, useWheelZoom } from './usePanZoom';
@@ -34,6 +60,9 @@ interface Props {
   onToggleMode?: () => void;
   /** Aperçu : ouvrir une photo en plein écran */
   onPhotoClick?: (photoId: string) => void;
+  exporting?: boolean;
+  onExportPdf?: () => void;
+  onExportPage?: (index: number) => void;
 }
 
 /** Activité en temps réel : qui vient de modifier, ou combien de personnes regardent. */
@@ -49,7 +78,7 @@ export function LiveBadge({ viewers, lastEditor }: { viewers: number; lastEditor
 }
 
 /** Vue ordinateur : le livre ouvert en double page, outils à gauche, stickers à droite. */
-export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick }: Props) {
+export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick, exporting = false, onExportPdf, onExportPage }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -64,6 +93,8 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
   const [flipping, setFlipping] = useState<number | null>(null);
   const [tool, setTool] = useState<Tool>('move');
   const [active, setActive] = useState(0);
+  /** Page survolée pendant un glisser-déposer de photos */
+  const [dropPage, setDropPage] = useState<number | null>(null);
   const flipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -168,7 +199,12 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
     const page = real === null ? null : pages[real];
     const isVisible = (slot === leftSlot || slot === rightSlot) && flipping === null;
     const isFront = side === 'front';
-    const activeRing = !readOnly && isVisible && real === activeIdx ? ', inset 0 0 0 3px rgba(246,193,67,.8)' : '';
+    const activeRing =
+      dropPage !== null && real === dropPage
+        ? ', inset 0 0 0 4px #2d6cc0'
+        : !readOnly && isVisible && real === activeIdx
+          ? ', inset 0 0 0 3px rgba(246,193,67,.8)'
+          : '';
     const shade = isFront
       ? 'inset 20px 0 24px -18px rgba(40,25,10,.4), 0 18px 36px rgba(0,0,0,.35)'
       : 'inset -20px 0 24px -18px rgba(40,25,10,.4), 0 18px 36px rgba(0,0,0,.35)';
@@ -227,9 +263,90 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
 
   const activeBg = pages[activeIdx]?.bg ?? 'creme';
   const hasSel = !!selected && tool === 'move';
+  const hasClip = useHasClipboard();
+  const locked = !!selected?.locked;
+
+  /* ---------- Raccourcis clavier (mode modification) ---------- */
+  const keysRef = useRef({ editor, activeIdx, readOnly, hasSel });
+  keysRef.current = { editor, activeIdx, readOnly, hasSel };
+  useEffect(() => {
+    const typing = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, [contenteditable]');
+    const onKey = (e: KeyboardEvent) => {
+      const k = keysRef.current;
+      if (k.readOnly || typing(e.target)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+      if (mod && key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        k.editor.undo();
+      } else if (mod && key === 'c' && k.hasSel) {
+        k.editor.copySel();
+      } else if (mod && key === 'd' && k.hasSel) {
+        e.preventDefault();
+        k.editor.duplicateSel();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && k.hasSel) {
+        e.preventDefault();
+        k.editor.delSel();
+      }
+    };
+    // Coller : une image du presse-papiers devient une photo, sinon on colle l'élément copié.
+    const onPaste = (e: ClipboardEvent) => {
+      const k = keysRef.current;
+      if (k.readOnly || typing(e.target)) return;
+      const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+      e.preventDefault();
+      if (files.length) void k.editor.addPhotos(k.activeIdx, files);
+      else void k.editor.paste(k.activeIdx);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('paste', onPaste);
+    };
+  }, []);
+
+  /* ---------- Glisser-déposer de photos depuis l'ordinateur ---------- */
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
+  /** Page visible sous le pointeur, et point de dépôt en coordonnées de page */
+  const pageAt = (x: number, y: number): { p: number; pt: { x: number; y: number } } | null => {
+    for (const el of document.elementsFromPoint(x, y)) {
+      const pg = (el as HTMLElement).closest?.('[data-page]') as HTMLElement | null;
+      const p = pg ? Number(pg.dataset.page) : -1;
+      if (p >= 0 && visible.includes(p)) {
+        const r = pg!.getBoundingClientRect();
+        const sc = r.width / 460 || 1;
+        return { p, pt: { x: (x - r.left) / sc, y: (y - r.top) / sc } };
+      }
+    }
+    return null;
+  };
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // sinon le navigateur ouvrirait l'image à la place de l'album
+      const hit = readOnly ? null : pageAt(e.clientX, e.clientY);
+      e.dataTransfer.dropEffect = hit ? 'copy' : 'none';
+      setDropPage(hit?.p ?? null);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropPage(null);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setDropPage(null);
+      const hit = readOnly ? null : pageAt(e.clientX, e.clientY);
+      if (!hit) return;
+      setTool('move');
+      setActive(hit.p);
+      void editor.addPhotos(hit.p, Array.from(e.dataTransfer.files), hit.pt);
+    },
+  };
+  const pageTitle = (i: number) => (i === 0 ? 'Couverture' : i === n - 1 ? 'Dos' : `Page ${i}`);
 
   return (
-    <div className="desk" style={{ backgroundColor: deskColor }}>
+    <div className="desk" style={{ backgroundColor: deskColor }} {...dropHandlers}>
       <div className="stage-fit" style={{ width: STAGE_W * scale, height: STAGE_H * scale }}>
         <div className="stage" style={{ transform: `scale(${scale})` }}>
           {/* En-tête */}
@@ -402,29 +519,34 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
                 Supprimer la double page
               </button>
             )}
+            {onExportPdf && onExportPage && (
+              <ExportMenu
+                placement="up"
+                disabled={exporting}
+                actions={[
+                  { label: 'Album complet en PDF', onSelect: onExportPdf },
+                  ...visible.map((i) => ({ label: `${pageTitle(i)} en image`, onSelect: () => onExportPage(i) })),
+                ]}
+              />
+            )}
           </div>
           {!readOnly && <SaveStatus className="save d-save" state={editor.saveState} uploading={editor.uploading} />}
 
           {/* Stickers, fond, sélection */}
           {!readOnly && (
           <div className="card d-side">
-            <div className="h">Stickers</div>
-            <div className="grid2" style={{ gap: 6 }}>
-              {STICKERS.map((s) => (
-                <button
-                  key={s.kind}
-                  type="button"
-                  className="sk"
-                  aria-label={s.label}
-                  onClick={() => {
-                    setTool('move');
-                    editor.addSticker(activeIdx, s.kind);
-                  }}
-                >
-                  <StickerArt kind={s.kind} />
-                </button>
-              ))}
-            </div>
+            <StickerPalette
+              variant="side"
+              onPick={(kind) => {
+                setTool('move');
+                editor.addSticker(activeIdx, kind);
+              }}
+              onPickCustom={(st) => {
+                setTool('move');
+                editor.addCustomSticker(activeIdx, st);
+              }}
+              onError={editor.showError}
+            />
             <div className="h" style={{ marginTop: 6 }}>
               Fond de page
             </div>
@@ -452,30 +574,56 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
               Sélection
             </div>
             {!hasSel && <div className="muted">Touche une photo, un sticker ou un texte pour le modifier.</div>}
+            {!hasSel && hasClip && (
+              <button type="button" className="mini" onClick={() => void editor.paste(activeIdx)} title="Ctrl/⌘ + V">
+                <IconPaste />
+                Coller ici
+              </button>
+            )}
             {hasSel && selected && (
               <>
-                {selected.type === 'text' && (
+                <div className="sel-actions">
+                  <button type="button" className="mini" onClick={editor.duplicateSel} aria-label="Dupliquer" title="Dupliquer (Ctrl/⌘ + D)">
+                    <IconDuplicate />
+                  </button>
+                  <button type="button" className="mini" onClick={editor.copySel} aria-label="Copier" title="Copier (Ctrl/⌘ + C), puis coller sur n'importe quelle page avec Ctrl/⌘ + V">
+                    <IconCopy />
+                  </button>
+                  <button type="button" className="mini" onClick={editor.toggleLock} aria-label={locked ? 'Déverrouiller' : 'Verrouiller'} aria-pressed={locked} title={locked ? 'Déverrouiller' : 'Verrouiller (ne bouge plus)'}>
+                    {locked ? <IconUnlock /> : <IconLock />}
+                  </button>
+                  <button type="button" className="mini" onClick={editor.bringToFront} aria-label="Premier plan" title="Premier plan">
+                    <IconToFront />
+                  </button>
+                  <button type="button" className="mini" onClick={editor.sendToBack} aria-label="Arrière-plan" title="Arrière-plan">
+                    <IconToBack />
+                  </button>
+                  <button type="button" className="mini" onClick={editor.delSel} disabled={locked} aria-label="Supprimer" title={locked ? 'Déverrouille pour supprimer' : 'Supprimer (Suppr)'} style={{ color: '#a8322f' }}>
+                    <IconTrash />
+                  </button>
+                </div>
+                {locked && <div className="muted">Verrouillé : déverrouille pour le modifier.</div>}
+                {!locked && selected.type === 'text' && (
                   <>
                     <TextArea editor={editor} item={selected} id="album-text" />
                     <FontPicker editor={editor} item={selected} className="mini" />
                   </>
                 )}
-                {selected.type === 'photo' && (
+                {!locked && selected.type === 'photo' && (
                   <button type="button" className="mini" aria-pressed={selected.frame} onClick={() => editor.patchSel({ frame: !selected.frame })}>
                     {selected.frame ? 'Cadre blanc : oui' : 'Cadre blanc : non'}
                   </button>
                 )}
-                <div className="grid2" style={{ gap: 6 }}>
-                  <button type="button" className="mini" onClick={() => editor.rotateSel(-15)} aria-label="Tourner à gauche">
-                    <IconUndo />
-                  </button>
-                  <button type="button" className="mini" onClick={() => editor.rotateSel(15)} aria-label="Tourner à droite">
-                    <IconRedoRot />
-                  </button>
-                </div>
-                <button type="button" className="mini" onClick={editor.delSel} style={{ color: '#a8322f' }}>
-                  Supprimer
-                </button>
+                {!locked && (
+                  <div className="grid2" style={{ gap: 6 }}>
+                    <button type="button" className="mini" onClick={() => editor.rotateSel(-15)} aria-label="Tourner à gauche">
+                      <IconUndo />
+                    </button>
+                    <button type="button" className="mini" onClick={() => editor.rotateSel(15)} aria-label="Tourner à droite">
+                      <IconRedoRot />
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

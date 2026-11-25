@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react';
-import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
+import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES } from './constants';
+import { useHasClipboard } from './clipboard';
+import { ExportMenu } from './ExportMenu';
 import {
   IconBack,
   IconBrush,
@@ -20,12 +22,19 @@ import {
   IconRedoRot,
   IconText,
   IconTrash,
+  IconCopy,
+  IconDuplicate,
+  IconLock,
+  IconPaste,
+  IconToBack,
+  IconToFront,
+  IconUnlock,
   IconUndo,
 } from './Icons';
 import { LiveBadge } from './DesktopEditor';
 import { PageView } from './PageView';
 import { SaveStatus } from './SaveStatus';
-import { StickerArt } from './Sticker';
+import { StickerPalette } from './StickerPalette';
 import { FontPicker, TextArea } from './TextEditor';
 import { blankPage, type AlbumEditor } from './useAlbumEditor';
 import { usePanZoom, usePinchZoom } from './usePanZoom';
@@ -53,10 +62,15 @@ interface Props {
   onToggleMode?: () => void;
   /** Aperçu : ouvrir une photo en plein écran */
   onPhotoClick?: (photoId: string) => void;
+  exporting?: boolean;
+  onExportPdf?: () => void;
+  onExportPage?: (index: number) => void;
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick, exporting = false, onExportPdf, onExportPage }: Props) {
+  const hasClip = useHasClipboard();
+  const [dropping, setDropping] = useState(false);
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -167,6 +181,16 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
           {subtitle && <span className="hand">{subtitle}</span>}
           {owner && <span className="by">par {owner}</span>}
         </div>
+        {onExportPdf && onExportPage && (
+          <ExportMenu
+            compact
+            disabled={exporting}
+            actions={[
+              { label: 'Album complet en PDF', onSelect: onExportPdf },
+              { label: `${cur === 0 ? 'La couverture' : cur === n - 1 ? 'Le dos' : `La page ${cur}`} en image`, onSelect: () => onExportPage(cur) },
+            ]}
+          />
+        )}
         {!readOnly && (
           <>
             {onToggleMode && (
@@ -183,7 +207,27 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
       </header>
 
       <div
-        className="m-stage"
+        className={`m-stage${dropping ? ' dropping' : ''}`}
+        onDragOver={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = readOnly ? 'none' : 'copy';
+          setDropping(!readOnly);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false);
+        }}
+        onDrop={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+          e.preventDefault();
+          setDropping(false);
+          if (readOnly) return;
+          const pg = e.currentTarget.querySelector(`[data-page="${cur}"]`);
+          const r = pg?.getBoundingClientRect();
+          const sc = r ? r.width / PAGE_W || 1 : 1;
+          const at = r ? { x: (e.clientX - r.left) / sc, y: (e.clientY - r.top) / sc } : undefined;
+          void editor.addPhotos(cur, Array.from(e.dataTransfer.files), at);
+        }}
         ref={(el) => {
           stageRef.current = el;
           pz.viewportRef.current = el;
@@ -259,7 +303,12 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
             </button>
             <div className="m-label">
               <span>{label}</span>
-              {lastEditor || viewers > 1 ? (
+              {!readOnly && hasClip ? (
+                <button type="button" className="chip m-paste" onClick={() => void editor.paste(cur)}>
+                  <IconPaste size={14} />
+                  Coller ici
+                </button>
+              ) : lastEditor || viewers > 1 ? (
                 <LiveBadge viewers={viewers} lastEditor={lastEditor} />
               ) : (
                 <small>glisse la page pour tourner</small>
@@ -271,13 +320,39 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
           </div>
         ) : (
           <div className="m-selbar">
-            <button type="button" className="ic" onClick={() => editor.rotateSel(-15)} aria-label="Tourner à gauche">
-              <IconUndo size={20} />
+            {!selected?.locked && (
+              <>
+                <button type="button" className="ic" onClick={() => editor.rotateSel(-15)} aria-label="Tourner à gauche">
+                  <IconUndo size={20} />
+                </button>
+                <button type="button" className="ic" onClick={() => editor.rotateSel(15)} aria-label="Tourner à droite">
+                  <IconRedoRot size={20} />
+                </button>
+              </>
+            )}
+            <button type="button" className="ic" onClick={editor.duplicateSel} aria-label="Dupliquer">
+              <IconDuplicate size={20} />
             </button>
-            <button type="button" className="ic" onClick={() => editor.rotateSel(15)} aria-label="Tourner à droite">
-              <IconRedoRot size={20} />
+            <button type="button" className="ic" onClick={editor.copySel} aria-label="Copier (pour coller sur une autre page)">
+              <IconCopy size={20} />
             </button>
-            {selected?.type === 'photo' && (
+            <button type="button" className="ic" onClick={editor.bringToFront} aria-label="Premier plan">
+              <IconToFront size={20} />
+            </button>
+            <button type="button" className="ic" onClick={editor.sendToBack} aria-label="Arrière-plan">
+              <IconToBack size={20} />
+            </button>
+            <button
+              type="button"
+              className="ic"
+              onClick={editor.toggleLock}
+              aria-label={selected?.locked ? 'Déverrouiller' : 'Verrouiller'}
+              aria-pressed={!!selected?.locked}
+              style={{ background: selected?.locked ? '#e6d9c2' : 'transparent' }}
+            >
+              {selected?.locked ? <IconUnlock size={20} /> : <IconLock size={20} />}
+            </button>
+            {!selected?.locked && selected?.type === 'photo' && (
               <button
                 type="button"
                 className="ic"
@@ -289,9 +364,11 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
                 <IconFrame size={20} />
               </button>
             )}
-            <button type="button" className="ic" onClick={editor.delSel} aria-label="Supprimer l'élément" style={{ color: '#a8322f' }}>
-              <IconTrash size={20} />
-            </button>
+            {!selected?.locked && (
+              <button type="button" className="ic" onClick={editor.delSel} aria-label="Supprimer l'élément" style={{ color: '#a8322f' }}>
+                <IconTrash size={20} />
+              </button>
+            )}
             <button type="button" className="chip" onClick={() => editor.setSel(null)} style={{ background: '#2b3340', color: '#f6efe2' }}>
               OK
             </button>
@@ -338,14 +415,12 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
 
           {tab === 'stickers' && (
             <>
-              <div className="h">Touche un sticker pour le coller</div>
-              <div className="m-stickers">
-                {STICKERS.map((st) => (
-                  <button key={st.kind} type="button" className="sk" aria-label={st.label} onClick={() => editor.addSticker(cur, st.kind)}>
-                    <StickerArt kind={st.kind} />
-                  </button>
-                ))}
-              </div>
+              <StickerPalette
+                variant="sheet"
+                onPick={(kind) => editor.addSticker(cur, kind)}
+                onPickCustom={(st) => editor.addCustomSticker(cur, st)}
+                onError={editor.showError}
+              />
             </>
           )}
 
