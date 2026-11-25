@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { photoUrl } from '@/lib/api';
 import { BG_DEFS } from './constants';
 import { eraserRadius } from './eraser';
@@ -38,6 +38,8 @@ export interface PageViewProps {
   onPageDown?: (e: ReactPointerEvent) => void;
   onItemDown?: (e: ReactPointerEvent, id: string, mode: DragMode) => void;
   onInkDown?: (e: ReactPointerEvent) => void;
+  /** Mode aperçu : clic sur une photo pour l'ouvrir en plein écran */
+  onPhotoClick?: (photoId: string) => void;
 }
 
 export function PageView({
@@ -54,7 +56,10 @@ export function PageView({
   onPageDown,
   onItemDown,
   onInkDown,
+  onPhotoClick,
 }: PageViewProps) {
+  // Position d'appui sur une photo : un clic après un glissement (tourner la page) ne l'ouvre pas.
+  const downAt = useRef<{ x: number; y: number } | null>(null);
   const bg = BG_DEFS[page?.bg ?? 'creme'];
   const hintColor = bg.dark ? 'rgba(246,239,226,.75)' : '#7a6650';
   const items = page?.items ?? [];
@@ -92,11 +97,24 @@ export function PageView({
 
       {items.map((it, n) => {
         const isSel = it.id === selId && tool === 'move';
+        const zoomable = it.type === 'photo' && !!onPhotoClick;
         return (
           <div
             key={it.id}
             className="item"
-            onPointerDown={(e) => onItemDown?.(e, it.id, 'move')}
+            onPointerDown={(e) => {
+              downAt.current = { x: e.clientX, y: e.clientY };
+              onItemDown?.(e, it.id, 'move');
+            }}
+            onClick={
+              it.type === 'photo' && onPhotoClick
+                ? (e) => {
+                    const d = downAt.current;
+                    if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
+                    onPhotoClick(it.photoId);
+                  }
+                : undefined
+            }
             style={{
               left: it.x,
               top: it.y,
@@ -106,7 +124,8 @@ export function PageView({
               zIndex: n + 1,
               outline: isSel ? `${touch ? 3 : 2}px dashed #2d6cc0` : 'none',
               outlineOffset: 5,
-              pointerEvents: interactive && tool === 'move' ? 'auto' : 'none',
+              pointerEvents: (interactive && tool === 'move') || zoomable ? 'auto' : 'none',
+              cursor: zoomable ? 'zoom-in' : undefined,
             }}
           >
             {it.type === 'photo' && (

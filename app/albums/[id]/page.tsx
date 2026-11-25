@@ -13,6 +13,8 @@ export default function AlbumPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<{ album: PublicAlbum; pages: Page[]; canEdit: boolean; isOwner: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ?edit=1 : ouvrir directement en modification (album tout juste créé, retour après connexion)
+  const [startInEdit] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('edit'));
 
   useEffect(() => {
     if (!id) return;
@@ -45,10 +47,11 @@ export default function AlbumPage() {
       subtitle={album.subtitle}
       deskColor={album.deskColor}
       initialPages={pages}
-      readOnly={!canEdit}
+      canEdit={canEdit}
+      startInEdit={startInEdit}
       owner={isOwner ? undefined : album.owner}
       backLabel={isOwner ? 'Albums' : 'Galerie'}
-      loginHref={`/login?next=${encodeURIComponent(`/albums/${album.id}`)}`}
+      loginHref={`/login?next=${encodeURIComponent(`/albums/${album.id}?edit=1`)}`}
       onBack={async (flush) => {
         if (canEdit) await flush();
         router.push(isOwner ? '/albums' : '/');

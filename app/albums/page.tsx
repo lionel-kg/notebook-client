@@ -30,7 +30,7 @@ export default function AlbumsPage() {
     setError(null);
     try {
       const { album } = await api.createAlbum(title, subtitle);
-      router.push(`/albums/${album.id}`);
+      router.push(`/albums/${album.id}?edit=1`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Création impossible');
       setBusy(false);

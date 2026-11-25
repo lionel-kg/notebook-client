@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { DesktopEditor } from './DesktopEditor';
 import { MobileEditor } from './MobileEditor';
+import { PhotoLightbox } from './PhotoLightbox';
 import { useAlbumEditor } from './useAlbumEditor';
 import { useAlbumRealtime } from './useAlbumRealtime';
 import type { Page } from './types';
@@ -30,8 +31,10 @@ interface Props {
   onBack: (flush: () => Promise<void>) => void;
   /** L'album a été supprimé pendant qu'on le regardait */
   onDeleted: (by: string) => void;
-  /** Lecture seule : on feuillette l'album sans pouvoir le modifier (visiteur). */
-  readOnly?: boolean;
+  /** La personne connectée peut modifier l'album (sinon : aperçu uniquement) */
+  canEdit: boolean;
+  /** Ouvrir directement en mode modification (ex. album tout juste créé) */
+  startInEdit?: boolean;
   /** Auteur affiché quand l'album appartient à quelqu'un d'autre */
   owner?: string;
   backLabel?: string;
@@ -39,9 +42,23 @@ interface Props {
   loginHref?: string;
 }
 
-export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages, onBack, onDeleted, readOnly = false, owner, backLabel, loginHref }: Props) {
+export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages, onBack, onDeleted, canEdit, startInEdit = false, owner, backLabel, loginHref }: Props) {
   const wide = useWideLayout();
   const editor = useAlbumEditor(albumId, initialPages, wide === false);
+
+  // Aperçu par défaut ; le mode modification est réservé aux personnes connectées.
+  const [mode, setMode] = useState<'preview' | 'edit'>(startInEdit && canEdit ? 'edit' : 'preview');
+  const editing = canEdit && mode === 'edit';
+  const toggleMode = () => {
+    editor.setSel(null);
+    setViewing(null);
+    setMode((m) => (m === 'edit' ? 'preview' : 'edit'));
+  };
+
+  // Photo affichée en plein écran (aperçu), parmi toutes les photos de l'album dans l'ordre des pages
+  const [viewing, setViewing] = useState<string | null>(null);
+  const photos = useMemo(() => editor.pages.flatMap((p) => p.items.flatMap((it) => (it.type === 'photo' ? [it.photoId] : []))), [editor.pages]);
+  const viewIndex = viewing ? photos.indexOf(viewing) : -1;
 
   // Changements des autres personnes en temps réel
   const live = useAlbumRealtime(albumId, editor.clientId, {
@@ -62,17 +79,22 @@ export function AlbumEditor({ albumId, title, subtitle, deskColor, initialPages,
     title,
     subtitle,
     deskColor,
-    readOnly,
+    readOnly: !editing,
     owner,
     backLabel,
-    loginHref,
+    loginHref: canEdit ? undefined : loginHref,
     viewers: live.viewers,
     lastEditor: live.lastEditor,
+    onToggleMode: canEdit ? toggleMode : undefined,
+    onPhotoClick: setViewing,
     onBack: () => onBack(editor.flush),
   };
   return (
     <>
       {wide ? <DesktopEditor {...props} /> : <MobileEditor {...props} />}
+      {!editing && viewIndex !== -1 && (
+        <PhotoLightbox photos={photos} index={viewIndex} onIndex={(i) => setViewing(photos[i])} onClose={() => setViewing(null)} />
+      )}
       {editor.error && (
         <div className="toast" role="alert">
           <span>{editor.error}</span>

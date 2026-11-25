@@ -10,9 +10,11 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconEraser,
+  IconEye,
   IconFrame,
   IconHeart,
   IconPage,
+  IconPencil,
   IconPhoto,
   IconPlus,
   IconRedoRot,
@@ -46,10 +48,14 @@ interface Props {
   viewers?: number;
   /** Personne qui vient de modifier l'album (affiché quelques secondes) */
   lastEditor?: string | null;
+  /** Bascule aperçu ⇄ modification (absent pour les visiteurs) */
+  onToggleMode?: () => void;
+  /** Aperçu : ouvrir une photo en plein écran */
+  onPhotoClick?: (photoId: string) => void;
 }
 
 /** Vue téléphone / tablette : une page à la fois, on glisse pour tourner, panneau d'outils en bas. */
-export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null }: Props) {
+export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -58,7 +64,8 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
   const [tab, setTabState] = useState<Tab>('photos');
   const [pen, setPen] = useState<'draw' | 'erase'>('draw');
   const flipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tool: Tool = tab === 'dessin' ? pen : 'move';
+  // En aperçu, on ne dessine pas : la page se tourne en glissant.
+  const tool: Tool = !readOnly && tab === 'dessin' ? pen : 'move';
   const cur = Math.min(pi, n - 1);
 
   useEffect(() => {
@@ -157,6 +164,11 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
         </div>
         {!readOnly && (
           <>
+            {onToggleMode && (
+              <button type="button" className="ic" onClick={onToggleMode} aria-label="Passer en mode aperçu">
+                <IconEye size={22} />
+              </button>
+            )}
             <SaveStatus className="save m-save" state={editor.saveState} uploading={editor.uploading} />
             <button type="button" className="ic" onClick={editor.undo} disabled={!editor.canUndo} aria-label="Annuler la dernière action">
               <IconUndo size={22} />
@@ -198,13 +210,14 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
                     editor.setSel(null);
                     editor.swipeDown(e, go);
                   }}
+                  onPhotoClick={readOnly && isVisible ? onPhotoClick : undefined}
                   onItemDown={(e, id, mode) => {
-                    if (tool !== 'move' || flipping !== null) return;
+                    if (readOnly || tool !== 'move' || flipping !== null) return;
                     const it = editor.itemDown(e, i, id, mode);
                     if (it?.type === 'text') setTabState('texte');
                   }}
                   onInkDown={(e) => {
-                    if (flipping !== null || tool === 'move') return;
+                    if (readOnly || flipping !== null || tool === 'move') return;
                     editor.inkDown(e, i, pen);
                   }}
                 />
@@ -262,11 +275,18 @@ export function MobileEditor({ editor, title, subtitle, deskColor, onBack, readO
         )}
       </div>
 
-      {readOnly && loginHref && (
+      {readOnly && (onToggleMode || loginHref) && (
         <div className="m-login">
-          <Link href={loginHref} className="btn">
-            Se connecter pour modifier
-          </Link>
+          {onToggleMode ? (
+            <button type="button" className="btn" onClick={onToggleMode}>
+              <IconPencil />
+              Modifier l&apos;album
+            </button>
+          ) : (
+            <Link href={loginHref!} className="btn">
+              Se connecter pour modifier
+            </Link>
+          )}
         </div>
       )}
 

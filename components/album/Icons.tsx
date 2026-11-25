@@ -106,3 +106,20 @@ export const IconBack = ({ size }: P) => (
     <path d="M11 6l-6 6 6 6" />
   </Svg>
 );
+export const IconEye = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+export const IconPencil = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+export const IconClose = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </Svg>
+);

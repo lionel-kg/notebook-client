@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BG_DEFS, BG_ORDER, COLORS, IDLE_RING, SELECT_RING, SIZES, STICKERS } from './constants';
-import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo } from './Icons';
+import { IconBack, IconBrush, IconChevronLeft, IconChevronRight, IconCursor, IconEraser, IconEye, IconPencil, IconPhoto, IconPlus, IconRedoRot, IconText, IconUndo } from './Icons';
 import { PageView } from './PageView';
 import { SaveStatus } from './SaveStatus';
 import { StickerArt } from './Sticker';
@@ -29,6 +29,10 @@ interface Props {
   viewers?: number;
   /** Personne qui vient de modifier l'album (affiché quelques secondes) */
   lastEditor?: string | null;
+  /** Bascule aperçu ⇄ modification (absent pour les visiteurs) */
+  onToggleMode?: () => void;
+  /** Aperçu : ouvrir une photo en plein écran */
+  onPhotoClick?: (photoId: string) => void;
 }
 
 /** Activité en temps réel : qui vient de modifier, ou combien de personnes regardent. */
@@ -44,7 +48,7 @@ export function LiveBadge({ viewers, lastEditor }: { viewers: number; lastEditor
 }
 
 /** Vue ordinateur : le livre ouvert en double page, outils à gauche, stickers à droite. */
-export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null }: Props) {
+export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, readOnly = false, owner, backLabel = 'Albums', loginHref, viewers = 1, lastEditor = null, onToggleMode, onPhotoClick }: Props) {
   const { pages, sel, selected } = editor;
   const n = pages.length;
 
@@ -168,11 +172,12 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
           }
         }}
         onItemDown={(e, id, mode) => {
-          if (tool !== 'move' || flipping !== null || real === null) return;
+          if (readOnly || tool !== 'move' || flipping !== null || real === null) return;
           if (editor.itemDown(e, real, id, mode)) setActive(real);
         }}
+        onPhotoClick={readOnly && isVisible ? onPhotoClick : undefined}
         onInkDown={(e) => {
-          if (flipping !== null || real === null || tool === 'move') return;
+          if (readOnly || flipping !== null || real === null || tool === 'move') return;
           setActive(real);
           editor.inkDown(e, real, tool);
         }}
@@ -213,13 +218,25 @@ export function DesktopEditor({ editor, title, subtitle, deskColor, onBack, read
               {owner && <span className="by">par {owner}</span>}
               <LiveBadge viewers={viewers} lastEditor={lastEditor} />
             </div>
-            {readOnly && loginHref && (
+            {readOnly && onToggleMode && (
+              <button type="button" className="btn" onClick={onToggleMode}>
+                <IconPencil />
+                Modifier
+              </button>
+            )}
+            {readOnly && !onToggleMode && loginHref && (
               <Link href={loginHref} className="btn">
                 Se connecter pour modifier
               </Link>
             )}
             {!readOnly && (
             <div className="row">
+              {onToggleMode && (
+                <button type="button" className="btn ghost" onClick={onToggleMode}>
+                  <IconEye />
+                  Aperçu
+                </button>
+              )}
               <label className="btn">
                 <IconPhoto />
                 Ajouter des photos
