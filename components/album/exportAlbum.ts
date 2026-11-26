@@ -15,10 +15,39 @@ export function slugify(title: string) {
   );
 }
 
-/** Attend que les images d'un nœud soient chargées et que les polices soient prêtes. */
+/**
+ * Safari (et tous les navigateurs sur iPhone/iPad, qui utilisent son moteur) dessine parfois
+ * une capture avant d'avoir peint les images qu'elle contient : les photos manquent.
+ */
+const isWebKit = () => typeof navigator !== 'undefined' && /AppleWebKit/i.test(navigator.userAgent) && !/(Chrome|Chromium|Edg|OPR|Android)\//i.test(navigator.userAgent);
+
+const blobToDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+
+/**
+ * Prépare les pages à capturer : chaque image (photos, stickers perso) est intégrée directement
+ * dans la page (data URL) puis décodée, pour qu'aucune ne soit encore « en chargement » à la capture.
+ */
 export async function waitForContent(root: HTMLElement) {
   await document.fonts.ready;
   const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(
+    imgs.map(async (img) => {
+      if (img.src.startsWith('data:')) return;
+      try {
+        const res = await fetch(img.src);
+        if (!res.ok) return;
+        img.src = await blobToDataUrl(await res.blob());
+      } catch {
+        // on garde l'image d'origine
+      }
+    }),
+  );
   await Promise.all(
     imgs.map((img) => {
       if (img.complete) return img.decode().catch(() => undefined);
@@ -64,6 +93,18 @@ async function warmUp(node: HTMLElement) {
   return fontEmbedCSS;
 }
 
+/**
+ * Capture d'une page. Sur Safari, une ou deux captures « à blanc » d'abord : elles forcent le navigateur
+ * à peindre les images, la capture suivante les contient.
+ */
+async function capture<T>(render: () => Promise<T>, prime: () => Promise<unknown>): Promise<T> {
+  if (isWebKit()) {
+    await prime().catch(() => undefined);
+    await prime().catch(() => undefined);
+  }
+  return render();
+}
+
 /** Album complet en PDF : une page du PDF par page de l'album (format 460 × 600 pt, soit ~16 × 21 cm). */
 export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress: (done: number) => void): Promise<Blob> {
   const pdf = await PDFDocument.create();
@@ -71,7 +112,11 @@ export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress
   pdf.setCreator('Notre album');
   const fontEmbedCSS = nodes[0] ? await warmUp(nodes[0]) : undefined;
   for (const [i, node] of nodes.entries()) {
-    const dataUrl = await toJpeg(node, { pixelRatio: 2.5, quality: 0.9, width: PAGE_W, height: PAGE_H, fontEmbedCSS });
+    const opts = { width: PAGE_W, height: PAGE_H, fontEmbedCSS };
+    const dataUrl = await capture(
+      () => toJpeg(node, { ...opts, pixelRatio: 2.5, quality: 0.9 }),
+      () => toJpeg(node, { ...opts, pixelRatio: 1, quality: 0.5 }),
+    );
     const jpg = await pdf.embedJpg(dataUrl);
     const page = pdf.addPage([PAGE_W, PAGE_H]);
     page.drawImage(jpg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
@@ -84,7 +129,11 @@ export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress
 /** Une page en image PNG haute définition (1380 × 1800 px). */
 export async function pageToPng(node: HTMLElement): Promise<Blob> {
   const fontEmbedCSS = await warmUp(node);
-  const blob = await toBlob(node, { pixelRatio: 3, width: PAGE_W, height: PAGE_H, fontEmbedCSS });
+  const opts = { width: PAGE_W, height: PAGE_H, fontEmbedCSS };
+  const blob = await capture(
+    () => toBlob(node, { ...opts, pixelRatio: 3 }),
+    () => toJpeg(node, { ...opts, pixelRatio: 1, quality: 0.5 }),
+  );
   if (!blob) throw new Error("Impossible de créer l'image");
   return blob;
 }
