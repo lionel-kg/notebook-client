@@ -1,4 +1,4 @@
-import { getFontEmbedCSS, toBlob, toJpeg } from 'html-to-image';
+import { getFontEmbedCSS, toJpeg, toSvg } from 'html-to-image';
 import { PDFDocument } from 'pdf-lib';
 import { PAGE_H, PAGE_W } from './types';
 
@@ -93,17 +93,76 @@ async function warmUp(node: HTMLElement) {
   return fontEmbedCSS;
 }
 
-/**
- * Capture d'une page. Sur Safari, une ou deux captures « à blanc » d'abord : elles forcent le navigateur
- * à peindre les images, la capture suivante les contient.
- */
-async function capture<T>(render: () => Promise<T>, prime: () => Promise<unknown>): Promise<T> {
-  if (isWebKit()) {
-    await prime().catch(() => undefined);
-    await prime().catch(() => undefined);
-  }
-  return render();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => img.decode().catch(() => undefined).then(() => resolve(img));
+    img.onerror = reject;
+    img.decoding = 'sync';
+    img.src = src;
+  });
 }
+
+/** Empreinte rapide du contenu du canvas, pour savoir si un nouveau dessin a changé quelque chose. */
+function fingerprint(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  try {
+    const d = ctx.getImageData(0, 0, w, h).data;
+    let s = 0;
+    for (let i = 0; i < d.length; i += 61) s = (s * 31 + d[i]) | 0;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Dessine une page dans un canvas.
+ * La page est d'abord transformée en image SVG (html-to-image), puis dessinée.
+ * Safari (Mac, et tous les navigateurs d'iPhone/iPad) ne décode les photos contenues dans ce SVG
+ * qu'après un premier dessin, et parfois bien plus tard sur iPhone : le premier dessin n'a que des cadres vides.
+ * Sur ce moteur on redessine donc la page jusqu'à ce que le résultat ne change plus.
+ */
+async function renderPage(node: HTMLElement, pixelRatio: number, fontEmbedCSS: string | undefined, background?: string) {
+  const svg = await toSvg(node, { width: PAGE_W, height: PAGE_H, fontEmbedCSS });
+  const img = await loadImage(svg);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(PAGE_W * pixelRatio);
+  canvas.height = Math.round(PAGE_H * pixelRatio);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponible');
+  const draw = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (background) {
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  };
+  draw();
+  if (isWebKit()) {
+    // au moins quelques passages (plus il y a d'images, plus il en faut), puis on attend que 3 dessins de suite soient identiques
+    const minDraws = Math.max(4, node.querySelectorAll('img').length + 2);
+    let prev = fingerprint(ctx, canvas.width, canvas.height);
+    let stable = 0;
+    for (let i = 1; i <= 40; i++) {
+      await sleep(Math.min(100 + i * 25, 400));
+      draw();
+      const f = fingerprint(ctx, canvas.width, canvas.height);
+      stable = f !== null && f === prev ? stable + 1 : 0;
+      prev = f;
+      if (i >= minDraws && stable >= 3) break;
+    }
+  }
+  return canvas;
+}
+
+/** Libère tout de suite la mémoire du canvas (Safari sur iPhone en a très peu). */
+const release = (canvas: HTMLCanvasElement) => {
+  canvas.width = 0;
+  canvas.height = 0;
+};
 
 /** Album complet en PDF : une page du PDF par page de l'album (format 460 × 600 pt, soit ~16 × 21 cm). */
 export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress: (done: number) => void): Promise<Blob> {
@@ -112,11 +171,9 @@ export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress
   pdf.setCreator('Notre album');
   const fontEmbedCSS = nodes[0] ? await warmUp(nodes[0]) : undefined;
   for (const [i, node] of nodes.entries()) {
-    const opts = { width: PAGE_W, height: PAGE_H, fontEmbedCSS };
-    const dataUrl = await capture(
-      () => toJpeg(node, { ...opts, pixelRatio: 2.5, quality: 0.9 }),
-      () => toJpeg(node, { ...opts, pixelRatio: 1, quality: 0.5 }),
-    );
+    const canvas = await renderPage(node, 2.5, fontEmbedCSS, '#ffffff');
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    release(canvas);
     const jpg = await pdf.embedJpg(dataUrl);
     const page = pdf.addPage([PAGE_W, PAGE_H]);
     page.drawImage(jpg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
@@ -129,11 +186,9 @@ export async function pagesToPdf(nodes: HTMLElement[], title: string, onProgress
 /** Une page en image PNG haute définition (1380 × 1800 px). */
 export async function pageToPng(node: HTMLElement): Promise<Blob> {
   const fontEmbedCSS = await warmUp(node);
-  const opts = { width: PAGE_W, height: PAGE_H, fontEmbedCSS };
-  const blob = await capture(
-    () => toBlob(node, { ...opts, pixelRatio: 3 }),
-    () => toJpeg(node, { ...opts, pixelRatio: 1, quality: 0.5 }),
-  );
+  const canvas = await renderPage(node, 3, fontEmbedCSS);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  release(canvas);
   if (!blob) throw new Error("Impossible de créer l'image");
   return blob;
 }
